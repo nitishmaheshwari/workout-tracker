@@ -1,6 +1,6 @@
 {
-  "name": "Workout Tracker",
-  "short_name": "Workout",
+  "name": "Health",
+  "short_name": "Health",
   "description": "Progressive overload workout tracker",
   "start_url": "/",
   "display": "standalone",

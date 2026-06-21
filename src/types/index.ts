@@ -25,14 +25,19 @@ export interface ExerciseSet {
   completed: boolean;
 }
 
+export type ExerciseDifficulty = 'easy' | 'moderate' | 'difficult' | null;
+
 export interface ExerciseLog {
   id: string;
   exerciseName: string;
   weight: number | null;
   sets: ExerciseSet[];
   notes: string;
+  difficulty: ExerciseDifficulty;
   order: number;
 }
+
+export type WorkoutDifficulty = 'easy' | 'moderate' | 'difficult' | null;
 
 export interface WorkoutSession {
   id: string;
@@ -42,6 +47,7 @@ export interface WorkoutSession {
   date: string;
   exercises: ExerciseLog[];
   notes: string;
+  difficulty: WorkoutDifficulty;
   completed: boolean;
   startedAt: string;
   completedAt: string | null;

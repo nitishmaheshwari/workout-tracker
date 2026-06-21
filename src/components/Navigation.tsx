@@ -66,8 +66,8 @@ const NAV_ITEMS: { view: View; label: string; icon: (active: boolean) => React.R
 
 export default function Navigation({ currentView, onNavigate }: NavigationProps) {
   return (
-    <nav className="fixed bottom-0 left-0 right-0 bg-white/80 backdrop-blur-xl border-t border-surface-200/60 safe-bottom z-50">
-      <div className="max-w-lg mx-auto flex items-center justify-around py-2 px-2">
+    <nav className="shrink-0 bg-white/80 backdrop-blur-xl border-t border-surface-200/60" style={{ paddingBottom: 'env(safe-area-inset-bottom, 0px)' }}>
+      <div className="flex items-center justify-around py-2 px-2">
         {NAV_ITEMS.map(({ view, label, icon }) => {
           const isActive = currentView === view;
           return (
