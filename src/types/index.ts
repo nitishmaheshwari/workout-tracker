@@ -68,6 +68,7 @@ export interface DashboardStats {
   workoutsThisWeek: number;
   workoutsThisMonth: number;
   currentStreak: number;
+  longestStreak: number;
   totalWorkouts: number;
   totalSets: number;
   totalReps: number;
