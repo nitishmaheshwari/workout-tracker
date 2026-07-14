@@ -12,29 +12,34 @@ interface WorkoutViewProps {
   program: WorkoutProgram;
   sessions: WorkoutSession[];
   startDay?: WorkoutDay | null;
+  editSession?: WorkoutSession | null;
   onComplete: () => void;
   onBack: () => void;
 }
 
-export default function WorkoutView({ program, sessions, startDay, onComplete, onBack }: WorkoutViewProps) {
-  const [activeSession, setActiveSession] = useState<WorkoutSession | null>(null);
+export default function WorkoutView({ program, sessions, startDay, editSession, onComplete, onBack }: WorkoutViewProps) {
+  const isEditing = !!editSession;
+  const [activeSession, setActiveSession] = useState<WorkoutSession | null>(editSession ?? null);
   const [currentExerciseIndex, setCurrentExerciseIndex] = useState(0);
   const [showDiscardConfirm, setShowDiscardConfirm] = useState(false);
   const [hasAutoStarted, setHasAutoStarted] = useState(false);
-  const [touchedExercises, setTouchedExercises] = useState<Set<number>>(new Set());
+  const [touchedExercises, setTouchedExercises] = useState<Set<number>>(
+    editSession ? new Set(editSession.exercises.map((_, i) => i)) : new Set()
+  );
   const topRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    if (activeSession) {
+    if (activeSession && !isEditing) {
       autoSaveDraft(activeSession);
     }
-  }, [activeSession]);
+  }, [activeSession, isEditing]);
 
   useEffect(() => {
     topRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [currentExerciseIndex]);
 
   useEffect(() => {
+    if (isEditing) return;
     if (startDay && !hasAutoStarted && !activeSession) {
       startWorkout(startDay);
       setHasAutoStarted(true);
@@ -161,7 +166,7 @@ export default function WorkoutView({ program, sessions, startDay, onComplete, o
       completedAt: new Date().toISOString(),
     };
     await saveSession(completed);
-    clearDraft();
+    if (!isEditing) clearDraft();
     onComplete();
   }
 
@@ -183,20 +188,42 @@ export default function WorkoutView({ program, sessions, startDay, onComplete, o
   ).length;
 
   const headerContent = (
-    <div className="flex items-center justify-between">
-      <button onClick={() => setShowDiscardConfirm(true)} className="text-[13px] text-charcoal-muted font-medium">
-        Cancel
-      </button>
-      <div className="text-center">
-        <p className="text-[15px] font-semibold">{activeSession.dayName}</p>
-        <p className="text-[11px] text-charcoal-muted">{completedCount}/{activeSession.exercises.length}</p>
+    <div>
+      <div className="flex items-center justify-between">
+        <button
+          onClick={() => (isEditing ? onBack() : setShowDiscardConfirm(true))}
+          className="text-[13px] text-charcoal-muted font-medium"
+        >
+          {isEditing ? 'Back' : 'Cancel'}
+        </button>
+        <div className="text-center">
+          <p className="text-[15px] font-semibold">
+            {isEditing ? `Edit · ${activeSession.dayName}` : activeSession.dayName}
+          </p>
+          <p className="text-[11px] text-charcoal-muted">
+            {completedCount}/{activeSession.exercises.length}
+          </p>
+        </div>
+        <button
+          onClick={finishWorkout}
+          className="text-[13px] text-accent font-semibold"
+        >
+          {isEditing ? 'Save' : 'Done'}
+        </button>
       </div>
-      <button
-        onClick={finishWorkout}
-        className="text-[13px] text-accent font-semibold"
-      >
-        Done
-      </button>
+      {isEditing && (
+        <div className="mt-2 flex items-center gap-2">
+          <label className="text-[11px] text-charcoal-muted font-medium uppercase tracking-wider">Date</label>
+          <input
+            type="date"
+            value={activeSession.date}
+            onChange={(e) =>
+              setActiveSession({ ...activeSession, date: e.target.value })
+            }
+            className="flex-1 bg-surface-50 rounded-lg px-3 py-1.5 text-[13px] font-medium focus:outline-none focus:ring-2 focus:ring-accent/20 focus:bg-white transition-all"
+          />
+        </div>
+      )}
     </div>
   );
 

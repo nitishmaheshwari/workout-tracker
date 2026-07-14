@@ -14,7 +14,7 @@ interface DashboardProps {
 
 export default function Dashboard({ stats, program, sessions, onStartNextSession, onChooseWorkout }: DashboardProps) {
   const nextDay = getNextWorkoutDay(program, sessions);
-  const lastWorkoutForDay = getLastWorkoutForDay(sessions, nextDay?.name || '');
+  const lastWorkoutForDay = nextDay ? getLastWorkoutForDay(sessions, nextDay.id) : null;
 
   const headerContent = (
     <div>
@@ -161,9 +161,9 @@ function getNextWorkoutDay(program: WorkoutProgram, sessions: WorkoutSession[]) 
   return program.days[nextIndex];
 }
 
-function getLastWorkoutForDay(sessions: WorkoutSession[], dayName: string): WorkoutSession | null {
+function getLastWorkoutForDay(sessions: WorkoutSession[], dayId: string): WorkoutSession | null {
   const matching = sessions
-    .filter(s => s.completed && s.dayName.toLowerCase() === dayName.toLowerCase())
+    .filter(s => s.completed && s.dayId === dayId)
     .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
   return matching[0] || null;
 }

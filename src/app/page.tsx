@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { WorkoutProgram, WorkoutSession, DashboardStats, WorkoutDay } from '@/types';
-import { getAllPrograms, getAllSessions, saveProgram, deleteSession } from '@/lib/db';
+import { getAllPrograms, getAllSessions, saveProgram, saveSession, deleteSession } from '@/lib/db';
 import { DEFAULT_PROGRAM } from '@/lib/defaults';
 import { calculateDashboardStats } from '@/lib/stats';
 import { autoBackupToLocalStorage, scheduleNightlyBackup, getBackupInfo, restoreFromLocalStorage } from '@/lib/backup';
@@ -23,6 +23,7 @@ export default function Home() {
   const [loading, setLoading] = useState(true);
   const [startDay, setStartDay] = useState<WorkoutDay | null>(null);
   const [showRestoreBanner, setShowRestoreBanner] = useState(false);
+  const [editSessionId, setEditSessionId] = useState<string | null>(null);
 
   useEffect(() => {
     loadData();
@@ -32,7 +33,7 @@ export default function Home() {
   async function loadData() {
     try {
       let programs = await getAllPrograms();
-      const allSessions = await getAllSessions();
+      let allSessions = await getAllSessions();
 
       if (programs.length === 0 && allSessions.length === 0) {
         const backup = getBackupInfo();
@@ -48,9 +49,11 @@ export default function Home() {
         programs = [DEFAULT_PROGRAM];
       }
 
+      allSessions = await normalizeExerciseNamesOnce(programs[0], allSessions);
+
       setProgram(programs[0]);
       setSessions(allSessions);
-      setStats(calculateDashboardStats(allSessions));
+      setStats(calculateDashboardStats(allSessions, programs[0]));
     } catch (e) {
       console.error('Failed to load data:', e);
     } finally {
@@ -61,7 +64,7 @@ export default function Home() {
   async function refreshSessions() {
     const allSessions = await getAllSessions();
     setSessions(allSessions);
-    setStats(calculateDashboardStats(allSessions));
+    setStats(calculateDashboardStats(allSessions, program));
     autoBackupToLocalStorage();
   }
 
@@ -130,14 +133,19 @@ export default function Home() {
             program={program}
             sessions={sessions}
             startDay={startDay}
+            editSession={editSessionId ? sessions.find(s => s.id === editSessionId) ?? null : null}
             onComplete={() => {
               refreshSessions();
               setStartDay(null);
-              setView('dashboard');
+              const wasEditing = editSessionId !== null;
+              setEditSessionId(null);
+              setView(wasEditing ? 'history' : 'dashboard');
             }}
             onBack={() => {
               setStartDay(null);
-              setView('dashboard');
+              const wasEditing = editSessionId !== null;
+              setEditSessionId(null);
+              setView(wasEditing ? 'history' : 'dashboard');
             }}
           />
         )}
@@ -148,15 +156,25 @@ export default function Home() {
               await deleteSession(id);
               refreshSessions();
             }}
+            onEditSession={(id) => {
+              setEditSessionId(id);
+              setStartDay(null);
+              setView('workout');
+            }}
           />
         )}
         {view === 'program' && program && (
           <ProgramEditor
             program={program}
-            onSave={(p) => {
+            onSave={async (p, renames) => {
+              await saveProgram(p);
               setProgram(p);
-              saveProgram(p);
-              autoBackupToLocalStorage();
+              if (renames.length > 0) {
+                await cascadeExerciseRenames(renames);
+                await refreshSessions();
+              } else {
+                autoBackupToLocalStorage();
+              }
               setView('dashboard');
             }}
           />
@@ -168,4 +186,74 @@ export default function Home() {
       <Navigation currentView={view} onNavigate={setView} />
     </div>
   );
+}
+
+const NORMALIZE_FLAG_KEY = 'exercise-name-normalized-v1';
+
+async function normalizeExerciseNamesOnce(
+  program: WorkoutProgram,
+  sessions: WorkoutSession[],
+): Promise<WorkoutSession[]> {
+  if (typeof window === 'undefined') return sessions;
+  if (localStorage.getItem(NORMALIZE_FLAG_KEY)) return sessions;
+
+  const canonical = new Map<string, string>();
+  for (const day of program.days) {
+    for (const ex of day.exercises) {
+      const key = ex.name.toLowerCase();
+      if (!canonical.has(key)) canonical.set(key, ex.name);
+    }
+  }
+
+  const updated: WorkoutSession[] = [];
+  for (const session of sessions) {
+    let dirty = false;
+    const newExercises = session.exercises.map(ex => {
+      const target = canonical.get(ex.exerciseName.toLowerCase());
+      if (target && target !== ex.exerciseName) {
+        dirty = true;
+        return { ...ex, exerciseName: target };
+      }
+      return ex;
+    });
+    if (dirty) {
+      const next = { ...session, exercises: newExercises };
+      await saveSession(next);
+      updated.push(next);
+    } else {
+      updated.push(session);
+    }
+  }
+
+  localStorage.setItem(NORMALIZE_FLAG_KEY, '1');
+  return updated;
+}
+
+async function cascadeExerciseRenames(
+  renames: { oldName: string; newName: string }[],
+): Promise<void> {
+  if (renames.length === 0) return;
+  const map = new Map<string, string>();
+  for (const r of renames) {
+    if (r.oldName.toLowerCase() !== r.newName.toLowerCase() || r.oldName !== r.newName) {
+      map.set(r.oldName.toLowerCase(), r.newName);
+    }
+  }
+  if (map.size === 0) return;
+
+  const all = await getAllSessions();
+  for (const session of all) {
+    let dirty = false;
+    const newExercises = session.exercises.map(ex => {
+      const target = map.get(ex.exerciseName.toLowerCase());
+      if (target && target !== ex.exerciseName) {
+        dirty = true;
+        return { ...ex, exerciseName: target };
+      }
+      return ex;
+    });
+    if (dirty) {
+      await saveSession({ ...session, exercises: newExercises });
+    }
+  }
 }

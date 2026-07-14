@@ -7,7 +7,7 @@ import PageLayout from '@/components/PageLayout';
 
 interface ProgramEditorProps {
   program: WorkoutProgram;
-  onSave: (program: WorkoutProgram) => void;
+  onSave: (program: WorkoutProgram, renames: { oldName: string; newName: string }[]) => void;
 }
 
 export default function ProgramEditor({ program, onSave }: ProgramEditorProps) {
@@ -44,8 +44,19 @@ export default function ProgramEditor({ program, onSave }: ProgramEditorProps) {
   function renameExercise(dayId: string, exerciseId: string, newName: string) {
     const day = editProgram.days.find(d => d.id === dayId);
     if (!day) return;
-    const exercises = day.exercises.map(e => e.id === exerciseId ? { ...e, name: newName } : e);
-    updateDay(dayId, { exercises });
+    const target = day.exercises.find(e => e.id === exerciseId);
+    if (!target) return;
+    const oldName = target.name;
+    const oldKey = oldName.toLowerCase();
+    const days = editProgram.days.map(d => ({
+      ...d,
+      exercises: d.exercises.map(e => {
+        if (e.id === exerciseId) return { ...e, name: newName };
+        if (e.name.toLowerCase() === oldKey) return { ...e, name: newName };
+        return e;
+      }),
+    }));
+    setEditProgram({ ...editProgram, days });
   }
 
   function removeExercise(dayId: string, exerciseId: string) {
@@ -92,11 +103,16 @@ export default function ProgramEditor({ program, onSave }: ProgramEditorProps) {
     setDragOverIdx(null);
   }, [dragging, dragOverIdx]);
 
+  function handleSave() {
+    const renames = collectRenames(program, editProgram);
+    onSave(editProgram, renames);
+  }
+
   const headerContent = (
     <div className="flex items-center justify-between">
       <h1 className="text-[28px] font-bold tracking-tight">Program</h1>
       <button
-        onClick={() => onSave(editProgram)}
+        onClick={handleSave}
         className="px-4 py-2 bg-accent text-white rounded-xl text-[12px] font-semibold active:scale-[0.95] transition-all shadow-sm"
       >
         Save Changes
@@ -229,4 +245,29 @@ export default function ProgramEditor({ program, onSave }: ProgramEditorProps) {
       </div>
     </PageLayout>
   );
+}
+
+function collectRenames(
+  original: WorkoutProgram,
+  edited: WorkoutProgram,
+): { oldName: string; newName: string }[] {
+  const originalById = new Map<string, string>();
+  for (const day of original.days) {
+    for (const ex of day.exercises) originalById.set(ex.id, ex.name);
+  }
+
+  const seen = new Set<string>();
+  const renames: { oldName: string; newName: string }[] = [];
+  for (const day of edited.days) {
+    for (const ex of day.exercises) {
+      const before = originalById.get(ex.id);
+      if (before == null) continue;
+      if (before === ex.name) continue;
+      const key = before.toLowerCase();
+      if (seen.has(key)) continue;
+      seen.add(key);
+      renames.push({ oldName: before, newName: ex.name });
+    }
+  }
+  return renames;
 }

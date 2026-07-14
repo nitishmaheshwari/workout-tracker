@@ -1,7 +1,7 @@
-import { WorkoutSession, DashboardStats, ExerciseHistory, WeeklyProgression, PersonalRecord } from '@/types';
+import { WorkoutSession, WorkoutProgram, DashboardStats, ExerciseHistory, WeeklyProgression, PersonalRecord } from '@/types';
 import { startOfWeek, startOfMonth, parseISO, differenceInDays, isSameDay, subDays } from 'date-fns';
 
-export function calculateDashboardStats(sessions: WorkoutSession[]): DashboardStats {
+export function calculateDashboardStats(sessions: WorkoutSession[], program: WorkoutProgram | null): DashboardStats {
   const now = new Date();
   const weekStart = startOfWeek(now, { weekStartsOn: 1 });
   const monthStart = startOfMonth(now);
@@ -16,7 +16,7 @@ export function calculateDashboardStats(sessions: WorkoutSession[]): DashboardSt
     s => parseISO(s.date) >= monthStart
   ).length;
 
-  const currentStreak = calculateStreak(completedSessions);
+  const currentStreak = calculateStreak(completedSessions, program);
 
   let totalSets = 0;
   let totalReps = 0;
@@ -45,34 +45,36 @@ export function calculateDashboardStats(sessions: WorkoutSession[]): DashboardSt
   };
 }
 
-function calculateStreak(sessions: WorkoutSession[]): number {
+function calculateStreak(sessions: WorkoutSession[], program: WorkoutProgram | null): number {
   if (sessions.length === 0) return 0;
 
-  const sortedDates = sessions
-    .map(s => parseISO(s.date))
-    .sort((a, b) => b.getTime() - a.getTime());
+  const sorted = [...sessions].sort(
+    (a, b) => parseISO(b.date).getTime() - parseISO(a.date).getTime()
+  );
 
-  const uniqueDates: Date[] = [];
-  for (const date of sortedDates) {
-    if (uniqueDates.length === 0 || !isSameDay(date, uniqueDates[uniqueDates.length - 1])) {
-      uniqueDates.push(date);
+  const uniqueByDate: WorkoutSession[] = [];
+  for (const s of sorted) {
+    const prev = uniqueByDate[uniqueByDate.length - 1];
+    if (!prev || !isSameDay(parseISO(s.date), parseISO(prev.date))) {
+      uniqueByDate.push(s);
     }
   }
 
+  if (uniqueByDate.length === 0) return 0;
+
   const today = new Date();
-  const yesterday = subDays(today, 1);
+  const lastWorkout = uniqueByDate[0];
+  const daysSinceLast = differenceInDays(today, parseISO(lastWorkout.date));
 
-  if (uniqueDates.length === 0) return 0;
-
-  const lastWorkout = uniqueDates[0];
-  if (differenceInDays(today, lastWorkout) > 1 && !isSameDay(lastWorkout, yesterday)) {
-    return 0;
-  }
+  if (daysSinceLast < 0) return 0;
+  if (!intermediatesAllRest(program, lastWorkout.dayId, daysSinceLast)) return 0;
 
   let streak = 1;
-  for (let i = 1; i < uniqueDates.length; i++) {
-    const diff = differenceInDays(uniqueDates[i - 1], uniqueDates[i]);
-    if (diff <= 1) {
+  for (let i = 1; i < uniqueByDate.length; i++) {
+    const newer = uniqueByDate[i - 1];
+    const older = uniqueByDate[i];
+    const actualGap = differenceInDays(parseISO(newer.date), parseISO(older.date));
+    if (intermediatesAllRest(program, older.dayId, actualGap)) {
       streak++;
     } else {
       break;
@@ -80,6 +82,25 @@ function calculateStreak(sessions: WorkoutSession[]): number {
   }
 
   return streak;
+}
+
+function intermediatesAllRest(
+  program: WorkoutProgram | null,
+  fromDayId: string,
+  calendarGap: number,
+): boolean {
+  if (calendarGap <= 1) return true;
+  if (!program || program.days.length === 0) return false;
+  const days = program.days;
+  const fromIdx = days.findIndex(d => d.id === fromDayId);
+  if (fromIdx === -1) return false;
+  const len = days.length;
+  if (calendarGap - 1 >= len) return false;
+  for (let k = 1; k < calendarGap; k++) {
+    const pos = (fromIdx + k) % len;
+    if (!days[pos].isRest) return false;
+  }
+  return true;
 }
 
 export function getExerciseHistory(sessions: WorkoutSession[], exerciseName: string): ExerciseHistory[] {
