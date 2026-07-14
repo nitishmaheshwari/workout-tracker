@@ -420,13 +420,7 @@ function CumulativeLineChart({ data }: { data: { label: string; value: number }[
     <div className="h-40">
       <ResponsiveContainer width="100%" height="100%">
         <LineChart data={data} margin={{ top: 10, right: 5, bottom: 5, left: -20 }}>
-          <XAxis
-            dataKey="label"
-            tick={{ fontSize: 9, fill: '#78716c' }}
-            axisLine={false}
-            tickLine={false}
-            dy={4}
-          />
+          <XAxis dataKey="label" hide />
           <YAxis
             tick={{ fontSize: 10, fill: '#78716c' }}
             axisLine={false}
@@ -450,8 +444,8 @@ function CumulativeLineChart({ data }: { data: { label: string; value: number }[
             dataKey="value"
             stroke="#3b5998"
             strokeWidth={2}
-            dot={{ fill: '#3b5998', r: 2.5, strokeWidth: 0 }}
-            activeDot={{ r: 5, fill: '#3b5998', strokeWidth: 2, stroke: '#fff' }}
+            dot={false}
+            activeDot={{ r: 4, fill: '#3b5998', strokeWidth: 2, stroke: '#fff' }}
           />
         </LineChart>
       </ResponsiveContainer>

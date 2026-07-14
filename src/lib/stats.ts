@@ -395,19 +395,24 @@ export interface CumulativePoint {
 export function getCumulativeWorkoutCounts(sessions: WorkoutSession[]): CumulativePoint[] {
   const completed = sessions.filter(s => s.completed);
   if (completed.length === 0) return [];
-  const sorted = [...completed].sort(
-    (a, b) => parseISO(a.date).getTime() - parseISO(b.date).getTime()
-  );
 
-  const points: CumulativePoint[] = [];
   const byDate = new Map<string, number>();
-  for (const s of sorted) {
+  for (const s of completed) {
     byDate.set(s.date, (byDate.get(s.date) ?? 0) + 1);
   }
+
+  const firstDate = [...byDate.keys()].sort()[0];
+  const start = parseISO(firstDate);
+  const today = new Date();
+  const totalDays = differenceInDays(today, start);
+
+  const points: CumulativePoint[] = [];
   let running = 0;
-  for (const [date, count] of Array.from(byDate.entries()).sort()) {
-    running += count;
-    points.push({ date, total: running });
+  for (let i = 0; i <= totalDays; i++) {
+    const day = addDays(start, i);
+    const key = format(day, 'yyyy-MM-dd');
+    running += byDate.get(key) ?? 0;
+    points.push({ date: key, total: running });
   }
   return points;
 }
