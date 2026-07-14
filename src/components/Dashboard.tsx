@@ -8,6 +8,7 @@ import {
   getThisMonthWeeklyCounts,
   getStreakRuns,
   getCumulativeWorkoutCounts,
+  getLast30DaysCounts,
 } from '@/lib/stats';
 import PageLayout from '@/components/PageLayout';
 import {
@@ -30,7 +31,7 @@ interface DashboardProps {
   onChooseWorkout: () => void;
 }
 
-type StatKey = 'week' | 'month' | 'currentStreak' | 'longestStreak' | 'total';
+type StatKey = 'week' | 'month' | 'currentStreak' | 'longestStreak' | 'total' | 'daysSince';
 
 export default function Dashboard({ stats, program, sessions, onStartNextSession, onChooseWorkout }: DashboardProps) {
   const nextDay = getNextWorkoutDay(program, sessions);
@@ -150,13 +151,22 @@ export default function Dashboard({ stats, program, sessions, onStartNextSession
             <path d="M7 20l5-5 5 5" /><path d="M7 4l5 5 5-5" /><path d="M12 9v6" />
           </svg>
         } />
-        <div className="col-span-2">
-          <StatCard value={stats.totalWorkouts} label="All Time" onClick={() => setOpenStat('total')} icon={
+        <StatCard
+          value={stats.daysSinceLastWorkout}
+          displayValue={formatDaysSince(stats.daysSinceLastWorkout)}
+          label="Days Since Last"
+          onClick={() => setOpenStat('daysSince')}
+          icon={
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" className="text-accent">
-              <path d="M12 20V10" /><path d="M18 20V4" /><path d="M6 20v-4" />
+              <circle cx="12" cy="12" r="10" /><polyline points="12 6 12 12 16 14" />
             </svg>
-          } />
-        </div>
+          }
+        />
+        <StatCard value={stats.totalWorkouts} label="All Time" onClick={() => setOpenStat('total')} icon={
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" className="text-accent">
+            <path d="M12 20V10" /><path d="M18 20V4" /><path d="M6 20v-4" />
+          </svg>
+        } />
       </div>
 
       {openStat && (
@@ -172,12 +182,14 @@ export default function Dashboard({ stats, program, sessions, onStartNextSession
   );
 }
 
-function StatCard({ value, label, highlight, icon, onClick }: { value: number; label: string; highlight?: boolean; icon: React.ReactNode; onClick?: () => void }) {
+function StatCard({ value, displayValue, label, highlight, icon, onClick }: { value: number | null; displayValue?: string; label: string; highlight?: boolean; icon: React.ReactNode; onClick?: () => void }) {
+  const shown = displayValue ?? (value == null ? '—' : String(value));
+  const numericHighlight = highlight && typeof value === 'number' && value > 0;
   return (
     <button
       type="button"
       onClick={onClick}
-      className={`card p-4 text-left w-full active:scale-[0.97] transition-all duration-200 ${highlight && value > 0 ? 'bg-accent/4 border-accent/15' : ''}`}
+      className={`card p-4 text-left w-full active:scale-[0.97] transition-all duration-200 ${numericHighlight ? 'bg-accent/4 border-accent/15' : ''}`}
     >
       <div className="flex items-center justify-between mb-2">
         <div className="w-7 h-7 rounded-lg bg-surface-100 flex items-center justify-center">
@@ -187,10 +199,16 @@ function StatCard({ value, label, highlight, icon, onClick }: { value: number; l
           <path d="M18 15l-6-6-6 6" transform="rotate(90 12 12)" />
         </svg>
       </div>
-      <p className="stat-number">{value}</p>
+      <p className="stat-number">{shown}</p>
       <p className="text-[11px] text-charcoal-muted font-medium mt-1.5">{label}</p>
     </button>
   );
+}
+
+function formatDaysSince(days: number | null): string {
+  if (days == null) return '—';
+  if (days === 0) return 'Today';
+  return String(days);
 }
 
 function StatModal({
@@ -242,18 +260,20 @@ function StatModal({
   );
 }
 
-function getModalMeta(statKey: StatKey, stats: DashboardStats): { label: string; value: number; subtitle?: string } {
+function getModalMeta(statKey: StatKey, stats: DashboardStats): { label: string; value: string; subtitle?: string } {
   switch (statKey) {
     case 'week':
-      return { label: 'This Week', value: stats.workoutsThisWeek, subtitle: 'Workouts logged per day' };
+      return { label: 'This Week', value: String(stats.workoutsThisWeek), subtitle: 'Workouts logged per day' };
     case 'month':
-      return { label: 'This Month', value: stats.workoutsThisMonth, subtitle: 'Workouts logged per week' };
+      return { label: 'This Month', value: String(stats.workoutsThisMonth), subtitle: 'Workouts logged per week' };
     case 'currentStreak':
-      return { label: 'Current Streak', value: stats.currentStreak, subtitle: 'Rest days count when scheduled' };
+      return { label: 'Current Streak', value: String(stats.currentStreak), subtitle: 'Rest days count when scheduled' };
     case 'longestStreak':
-      return { label: 'Longest Streak', value: stats.longestStreak, subtitle: 'Your best run so far' };
+      return { label: 'Longest Streak', value: String(stats.longestStreak), subtitle: 'Your best run so far' };
     case 'total':
-      return { label: 'All Time', value: stats.totalWorkouts, subtitle: 'Cumulative workouts' };
+      return { label: 'All Time', value: String(stats.totalWorkouts), subtitle: 'Cumulative workouts' };
+    case 'daysSince':
+      return { label: 'Days Since Last', value: formatDaysSince(stats.daysSinceLastWorkout), subtitle: 'Activity in the last 30 days' };
   }
 }
 
@@ -272,6 +292,10 @@ function StatChart({
   }
   if (statKey === 'month') {
     const data = getThisMonthWeeklyCounts(sessions);
+    return <SimpleBarChart data={data} />;
+  }
+  if (statKey === 'daysSince') {
+    const data = getLast30DaysCounts(sessions);
     return <SimpleBarChart data={data} />;
   }
   if (statKey === 'currentStreak' || statKey === 'longestStreak') {

@@ -45,6 +45,15 @@ export function calculateDashboardStats(sessions: WorkoutSession[], program: Wor
     }
   }
 
+  let daysSinceLastWorkout: number | null = null;
+  if (completedSessions.length > 0) {
+    const latest = completedSessions
+      .map(s => parseISO(s.date))
+      .sort((a, b) => b.getTime() - a.getTime())[0];
+    const diff = differenceInDays(now, latest);
+    daysSinceLastWorkout = diff < 0 ? 0 : diff;
+  }
+
   return {
     workoutsThisWeek,
     workoutsThisMonth,
@@ -54,6 +63,7 @@ export function calculateDashboardStats(sessions: WorkoutSession[], program: Wor
     totalSets,
     totalReps,
     totalVolume,
+    daysSinceLastWorkout,
   };
 }
 
@@ -359,6 +369,22 @@ export function getStreakRuns(sessions: WorkoutSession[], program: WorkoutProgra
     endDate: r.end.date,
     isCurrent: currentAlive && i === runs.length - 1,
   }));
+}
+
+export function getLast30DaysCounts(sessions: WorkoutSession[]): DailyBar[] {
+  const now = new Date();
+  const completed = sessions.filter(s => s.completed);
+  const bars: DailyBar[] = [];
+  for (let i = 29; i >= 0; i--) {
+    const day = subDays(now, i);
+    const count = completed.filter(s => isSameDay(parseISO(s.date), day)).length;
+    bars.push({
+      label: format(day, 'M/d'),
+      value: count,
+      isToday: isSameDay(day, now),
+    });
+  }
+  return bars;
 }
 
 export interface CumulativePoint {
