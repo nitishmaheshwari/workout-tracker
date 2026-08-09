@@ -18,13 +18,15 @@ export function calculateDashboardStats(sessions: WorkoutSession[], program: Wor
 
   const completedSessions = sessions.filter(s => s.completed);
 
-  const workoutsThisWeek = completedSessions.filter(
-    s => parseISO(s.date) >= weekStart
-  ).length;
+  // Logged sessions plus scheduled rest days that fell in range but weren't
+  // explicitly logged — so rest days count toward the week/month totals.
+  const workoutsThisWeek =
+    completedSessions.filter(s => parseISO(s.date) >= weekStart).length +
+    getScheduledRestDates(completedSessions, program, weekStart, now).size;
 
-  const workoutsThisMonth = completedSessions.filter(
-    s => parseISO(s.date) >= monthStart
-  ).length;
+  const workoutsThisMonth =
+    completedSessions.filter(s => parseISO(s.date) >= monthStart).length +
+    getScheduledRestDates(completedSessions, program, monthStart, now).size;
 
   const currentStreak = calculateStreak(completedSessions, program);
   const longestStreak = calculateLongestStreak(completedSessions, program);
@@ -70,6 +72,54 @@ export function calculateDashboardStats(sessions: WorkoutSession[], program: Wor
   };
 }
 
+// Build a date -> program-day-index anchor list from completed sessions, so a
+// schedule slot can be derived for any calendar date (advances one program day
+// per calendar day from the most recent anchor on or before that date).
+function buildAnchors(sessions: WorkoutSession[], program: WorkoutProgram) {
+  return [...sessions]
+    .sort((a, b) => parseISO(a.date).getTime() - parseISO(b.date).getTime())
+    .map(s => ({ date: parseISO(s.date), idx: program.days.findIndex(d => d.id === s.dayId) }))
+    .filter(a => a.idx !== -1);
+}
+
+function scheduledSlot(
+  anchors: { date: Date; idx: number }[],
+  program: WorkoutProgram,
+  day: Date,
+): number | null {
+  let anchor: { date: Date; idx: number } | null = null;
+  for (const a of anchors) {
+    if (a.date <= day) anchor = a;
+    else break;
+  }
+  if (!anchor) return null; // before the first workout
+  const gap = differenceInDays(day, anchor.date);
+  return (anchor.idx + gap) % program.days.length;
+}
+
+// Scheduled rest days in [start, end] (inclusive) that weren't explicitly
+// logged — these should still count toward week/month totals.
+function getScheduledRestDates(
+  sessions: WorkoutSession[],
+  program: WorkoutProgram | null,
+  start: Date,
+  end: Date,
+): Set<string> {
+  const result = new Set<string>();
+  if (!program || program.days.length === 0) return result;
+  const anchors = buildAnchors(sessions, program);
+  if (anchors.length === 0) return result;
+
+  const logged = new Set(sessions.map(s => format(parseISO(s.date), 'yyyy-MM-dd')));
+  for (let day = new Date(start); day <= end; day = addDays(day, 1)) {
+    const key = format(day, 'yyyy-MM-dd');
+    if (logged.has(key)) continue;
+    const slot = scheduledSlot(anchors, program, day);
+    if (slot !== null && program.days[slot].isRest) result.add(key);
+  }
+  return result;
+}
+
 // Count scheduled TRAINING days this month (up to today) with nothing logged.
 // The schedule advances one program day per calendar day, anchored by the last
 // completed session on or before each date. Rest days are never "missed", and
@@ -82,33 +132,17 @@ function calculateMissedThisMonth(
 ): number {
   if (!program || program.days.length === 0) return 0;
 
-  const loggedDates = new Set(sessions.map(s => format(parseISO(s.date), 'yyyy-MM-dd')));
-
-  // Build a lookup of date -> program day index from completed sessions, so we
-  // can anchor the schedule to what was actually done.
-  const anchors = [...sessions]
-    .sort((a, b) => parseISO(a.date).getTime() - parseISO(b.date).getTime())
-    .map(s => ({ date: parseISO(s.date), idx: program.days.findIndex(d => d.id === s.dayId) }))
-    .filter(a => a.idx !== -1);
-
+  const anchors = buildAnchors(sessions, program);
   if (anchors.length === 0) return 0;
+
+  const loggedDates = new Set(sessions.map(s => format(parseISO(s.date), 'yyyy-MM-dd')));
 
   let missed = 0;
   for (let day = new Date(monthStart); day <= now; day = addDays(day, 1)) {
     const key = format(day, 'yyyy-MM-dd');
     if (loggedDates.has(key)) continue;
-
-    // Find the latest anchor on or before this day to derive the schedule slot.
-    let anchor = null;
-    for (const a of anchors) {
-      if (a.date <= day) anchor = a;
-      else break;
-    }
-    if (!anchor) continue; // before the very first workout — not counted
-
-    const gap = differenceInDays(day, anchor.date);
-    const slot = (anchor.idx + gap) % program.days.length;
-    if (!program.days[slot].isRest) missed++;
+    const slot = scheduledSlot(anchors, program, day);
+    if (slot !== null && !program.days[slot].isRest) missed++;
   }
   return missed;
 }
@@ -318,43 +352,49 @@ export interface DailyBar {
   isToday: boolean;
 }
 
-export function getThisWeekDailyCounts(sessions: WorkoutSession[]): DailyBar[] {
+export function getThisWeekDailyCounts(sessions: WorkoutSession[], program: WorkoutProgram | null = null): DailyBar[] {
   const now = new Date();
   const weekStart = startOfWeek(now, { weekStartsOn: 1 });
   const completed = sessions.filter(s => s.completed);
+  // Scheduled rest days (up to today) that weren't logged also count as a day.
+  const restDates = getScheduledRestDates(completed, program, weekStart, now);
   const bars: DailyBar[] = [];
   for (let i = 0; i < 7; i++) {
     const day = addDays(weekStart, i);
-    const count = completed.filter(s => isSameDay(parseISO(s.date), day)).length;
+    const logged = completed.filter(s => isSameDay(parseISO(s.date), day)).length;
+    const restCredit = restDates.has(format(day, 'yyyy-MM-dd')) ? 1 : 0;
     bars.push({
       label: format(day, 'EEE'),
-      value: count,
+      value: logged + restCredit,
       isToday: isSameDay(day, now),
     });
   }
   return bars;
 }
 
-export function getThisMonthWeeklyCounts(sessions: WorkoutSession[]): DailyBar[] {
+export function getThisMonthWeeklyCounts(sessions: WorkoutSession[], program: WorkoutProgram | null = null): DailyBar[] {
   const now = new Date();
   const monthStart = startOfMonth(now);
   const monthEnd = endOfMonth(now);
   const completed = sessions.filter(s => s.completed);
+  const restDates = getScheduledRestDates(completed, program, monthStart, now);
 
   const bars: DailyBar[] = [];
   let weekIndex = 1;
   let cursor = startOfWeek(monthStart, { weekStartsOn: 1 });
   while (cursor <= monthEnd) {
     const weekEnd = addDays(cursor, 6);
-    const count = completed.filter(s => {
-      const d = parseISO(s.date);
-      return d >= cursor && d <= weekEnd && d >= monthStart && d <= monthEnd;
-    }).length;
+    const inRange = (d: Date) => d >= cursor && d <= weekEnd && d >= monthStart && d <= monthEnd;
+    const logged = completed.filter(s => inRange(parseISO(s.date))).length;
+    let restCredit = 0;
+    for (const key of restDates) {
+      if (inRange(parseISO(key))) restCredit++;
+    }
     const containsToday =
       now >= cursor && now <= weekEnd;
     bars.push({
       label: `W${weekIndex}`,
-      value: count,
+      value: logged + restCredit,
       isToday: containsToday,
     });
     cursor = addDays(cursor, 7);

@@ -284,11 +284,11 @@ function StatChart({
   program: WorkoutProgram;
 }) {
   if (statKey === 'week') {
-    const data = getThisWeekDailyCounts(sessions);
+    const data = getThisWeekDailyCounts(sessions, program);
     return <SimpleBarChart data={data} />;
   }
   if (statKey === 'month') {
-    const data = getThisMonthWeeklyCounts(sessions);
+    const data = getThisMonthWeeklyCounts(sessions, program);
     return <SimpleBarChart data={data} />;
   }
   if (statKey === 'missed') {
