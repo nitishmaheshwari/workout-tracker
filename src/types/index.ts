@@ -41,7 +41,6 @@ export interface ExerciseLog {
   exerciseName: string;
   weight: number | null;
   sets: ExerciseSet[];
-  notes: string;
   difficulty: ExerciseDifficulty;
   order: number;
 }
@@ -55,7 +54,6 @@ export interface WorkoutSession {
   dayName: string;
   date: string;
   exercises: ExerciseLog[];
-  notes: string;
   difficulty: WorkoutDifficulty;
   completed: boolean;
   startedAt: string;
@@ -89,7 +87,6 @@ export interface ExerciseHistory {
   date: string;
   weight: number | null;
   sets: ExerciseSet[];
-  notes: string;
   volume: number;
 }
 

@@ -174,7 +174,6 @@ export function getExerciseHistory(sessions: WorkoutSession[], exerciseName: str
           date: session.date,
           weight: exercise.weight,
           sets: exercise.sets,
-          notes: exercise.notes,
           volume,
         });
       }

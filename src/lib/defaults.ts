@@ -22,7 +22,6 @@ export const DEFAULT_PROGRAM: WorkoutProgram = {
     { id: 'ex-leg-extension', name: 'Leg Extension', order: 14 },
     { id: 'ex-leg-curl', name: 'Leg Curl', order: 15 },
     { id: 'ex-calf-extension', name: 'Calf Extension', order: 16 },
-    { id: 'ex-core', name: 'Core', order: 17 },
   ],
   days: [
     {
@@ -64,7 +63,6 @@ export const DEFAULT_PROGRAM: WorkoutProgram = {
         { exerciseId: 'ex-leg-extension', order: 1 },
         { exerciseId: 'ex-leg-curl', order: 2 },
         { exerciseId: 'ex-calf-extension', order: 3 },
-        { exerciseId: 'ex-core', order: 4 },
       ],
     },
     {
@@ -106,7 +104,6 @@ export const DEFAULT_PROGRAM: WorkoutProgram = {
         { exerciseId: 'ex-leg-extension', order: 1 },
         { exerciseId: 'ex-leg-curl', order: 2 },
         { exerciseId: 'ex-calf-extension', order: 3 },
-        { exerciseId: 'ex-core', order: 4 },
       ],
     },
     {

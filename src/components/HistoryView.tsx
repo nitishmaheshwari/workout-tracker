@@ -170,11 +170,6 @@ export default function HistoryView({ sessions, onDeleteSession, onEditSession }
                     </>
                   )}
                 </div>
-                {session.notes && (
-                  <p className="text-[11px] text-charcoal-muted mt-2 italic leading-relaxed">
-                    &ldquo;{session.notes}&rdquo;
-                  </p>
-                )}
                 {isConfirming && (
                   <div className="mt-3 pt-3 border-t border-surface-100 flex items-center justify-between">
                     <p className="text-[11px] text-red-500 font-medium">Delete this session?</p>
@@ -373,11 +368,6 @@ function ExerciseDetail({
                   <p className="text-[12px] text-charcoal-muted mt-0.5 tabular-nums">
                     {entry.sets.map(s => s.reps ?? '—').join(' / ')} reps
                   </p>
-                  {entry.notes && (
-                    <p className="text-[11px] text-charcoal-muted/80 mt-1.5 italic leading-relaxed">
-                      &ldquo;{entry.notes}&rdquo;
-                    </p>
-                  )}
                   {isConfirming && sessionId && (
                     <div className="mt-2 flex items-center gap-2">
                       <p className="text-[10px] text-red-500 font-medium">Delete entire session?</p>
