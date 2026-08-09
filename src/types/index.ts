@@ -81,6 +81,7 @@ export interface DashboardStats {
   totalReps: number;
   totalVolume: number;
   daysSinceLastWorkout: number | null;
+  missedThisMonth: number;
 }
 
 export interface ExerciseHistory {

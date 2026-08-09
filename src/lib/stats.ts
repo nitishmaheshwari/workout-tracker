@@ -54,6 +54,16 @@ export function calculateDashboardStats(sessions: WorkoutSession[], program: Wor
     daysSinceLastWorkout = diff < 0 ? 0 : diff;
   }
 
+  // Days this month (up to today) with no completed session logged — i.e. days
+  // skipped entirely. Rest days count as logged once completed.
+  const loggedDatesThisMonth = new Set(
+    completedSessions
+      .filter(s => parseISO(s.date) >= monthStart)
+      .map(s => format(parseISO(s.date), 'yyyy-MM-dd'))
+  );
+  const daysElapsedThisMonth = now.getDate();
+  const missedThisMonth = Math.max(0, daysElapsedThisMonth - loggedDatesThisMonth.size);
+
   return {
     workoutsThisWeek,
     workoutsThisMonth,
@@ -64,6 +74,7 @@ export function calculateDashboardStats(sessions: WorkoutSession[], program: Wor
     totalReps,
     totalVolume,
     daysSinceLastWorkout,
+    missedThisMonth,
   };
 }
 

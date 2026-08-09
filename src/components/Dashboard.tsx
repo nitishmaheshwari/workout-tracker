@@ -31,7 +31,7 @@ interface DashboardProps {
   onChooseWorkout: () => void;
 }
 
-type StatKey = 'week' | 'month' | 'currentStreak' | 'longestStreak' | 'total' | 'daysSince';
+type StatKey = 'week' | 'month' | 'currentStreak' | 'longestStreak' | 'total' | 'missed';
 
 export default function Dashboard({ stats, program, sessions, onStartNextSession, onChooseWorkout }: DashboardProps) {
   const nextDay = getNextWorkoutDay(program, sessions);
@@ -156,13 +156,12 @@ export default function Dashboard({ stats, program, sessions, onStartNextSession
           </svg>
         } />
         <StatCard
-          value={stats.daysSinceLastWorkout}
-          displayValue={formatDaysSince(stats.daysSinceLastWorkout)}
-          label="Days Since Last"
-          onClick={() => setOpenStat('daysSince')}
+          value={stats.missedThisMonth}
+          label="Missed This Month"
+          onClick={() => setOpenStat('missed')}
           icon={
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" className="text-accent">
-              <circle cx="12" cy="12" r="10" /><polyline points="12 6 12 12 16 14" />
+              <circle cx="12" cy="12" r="10" /><line x1="15" y1="9" x2="9" y2="15" /><line x1="9" y1="9" x2="15" y2="15" />
             </svg>
           }
         />
@@ -207,12 +206,6 @@ function StatCard({ value, displayValue, label, highlight, icon, onClick }: { va
       <p className="text-[11px] text-charcoal-muted font-medium mt-1">{label}</p>
     </button>
   );
-}
-
-function formatDaysSince(days: number | null): string {
-  if (days == null) return '—';
-  if (days === 0) return 'Today';
-  return String(days);
 }
 
 function StatModal({
@@ -276,8 +269,8 @@ function getModalMeta(statKey: StatKey, stats: DashboardStats): { label: string;
       return { label: 'Longest Streak', value: String(stats.longestStreak), subtitle: 'Your best run so far' };
     case 'total':
       return { label: 'All Time', value: String(stats.totalWorkouts), subtitle: 'Cumulative workouts' };
-    case 'daysSince':
-      return { label: 'Days Since Last', value: formatDaysSince(stats.daysSinceLastWorkout), subtitle: 'Activity in the last 30 days' };
+    case 'missed':
+      return { label: 'Missed This Month', value: String(stats.missedThisMonth), subtitle: 'Days this month with nothing logged' };
   }
 }
 
@@ -298,7 +291,7 @@ function StatChart({
     const data = getThisMonthWeeklyCounts(sessions);
     return <SimpleBarChart data={data} />;
   }
-  if (statKey === 'daysSince') {
+  if (statKey === 'missed') {
     const data = getLast30DaysCounts(sessions);
     return <SimpleBarChart data={data} />;
   }
