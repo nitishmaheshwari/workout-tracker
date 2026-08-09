@@ -84,19 +84,23 @@ function calculateLongestStreak(sessions: WorkoutSession[], program: WorkoutProg
 
   if (uniqueByDate.length === 0) return 0;
 
+  // A run is a set of workouts bridged only by scheduled rest days. Its length
+  // is the calendar span (inclusive), so rest days in between count too.
   let longest = 1;
-  let current = 1;
+  let runStart = uniqueByDate[0];
   for (let i = 1; i < uniqueByDate.length; i++) {
     const prev = uniqueByDate[i - 1];
     const curr = uniqueByDate[i];
     const gap = differenceInDays(parseISO(curr.date), parseISO(prev.date));
-    if (intermediatesAllRest(program, prev.dayId, gap)) {
-      current++;
-      if (current > longest) longest = current;
-    } else {
-      current = 1;
+    if (!intermediatesAllRest(program, prev.dayId, gap)) {
+      const span = differenceInDays(parseISO(prev.date), parseISO(runStart.date)) + 1;
+      if (span > longest) longest = span;
+      runStart = curr;
     }
   }
+  const last = uniqueByDate[uniqueByDate.length - 1];
+  const span = differenceInDays(parseISO(last.date), parseISO(runStart.date)) + 1;
+  if (span > longest) longest = span;
   return longest;
 }
 
@@ -124,19 +128,21 @@ function calculateStreak(sessions: WorkoutSession[], program: WorkoutProgram | n
   if (daysSinceLast < 0) return 0;
   if (!intermediatesAllRest(program, lastWorkout.dayId, daysSinceLast)) return 0;
 
-  let streak = 1;
+  // Walk back to the workout that started the current run (bridged only by
+  // scheduled rest days), then count calendar days from there through today.
+  let runStart = lastWorkout;
   for (let i = 1; i < uniqueByDate.length; i++) {
     const newer = uniqueByDate[i - 1];
     const older = uniqueByDate[i];
     const actualGap = differenceInDays(parseISO(newer.date), parseISO(older.date));
     if (intermediatesAllRest(program, older.dayId, actualGap)) {
-      streak++;
+      runStart = older;
     } else {
       break;
     }
   }
 
-  return streak;
+  return differenceInDays(today, parseISO(runStart.date)) + 1;
 }
 
 function intermediatesAllRest(
@@ -335,25 +341,22 @@ export function getStreakRuns(sessions: WorkoutSession[], program: WorkoutProgra
     }
   }
 
-  const runs: { start: WorkoutSession; end: WorkoutSession; length: number }[] = [];
+  const runs: { start: WorkoutSession; end: WorkoutSession }[] = [];
   let start = unique[0];
   let end = unique[0];
-  let length = 1;
   for (let i = 1; i < unique.length; i++) {
     const prev = unique[i - 1];
     const curr = unique[i];
     const gap = differenceInDays(parseISO(curr.date), parseISO(prev.date));
     if (intermediatesAllRest(program, prev.dayId, gap)) {
       end = curr;
-      length++;
     } else {
-      runs.push({ start, end, length });
+      runs.push({ start, end });
       start = curr;
       end = curr;
-      length = 1;
     }
   }
-  runs.push({ start, end, length });
+  runs.push({ start, end });
 
   const today = new Date();
   const lastRun = runs[runs.length - 1];
@@ -361,13 +364,20 @@ export function getStreakRuns(sessions: WorkoutSession[], program: WorkoutProgra
   const currentAlive =
     daysSinceLast >= 0 && intermediatesAllRest(program, lastRun.end.dayId, daysSinceLast);
 
-  return runs.map((r, i) => ({
-    index: i + 1,
-    length: r.length,
-    startDate: r.start.date,
-    endDate: r.end.date,
-    isCurrent: currentAlive && i === runs.length - 1,
-  }));
+  return runs.map((r, i) => {
+    const isCurrent = currentAlive && i === runs.length - 1;
+    // Length = calendar span (inclusive of scheduled rest days). A live run
+    // extends through today.
+    const endDate = isCurrent ? today : parseISO(r.end.date);
+    const length = differenceInDays(endDate, parseISO(r.start.date)) + 1;
+    return {
+      index: i + 1,
+      length,
+      startDate: r.start.date,
+      endDate: r.end.date,
+      isCurrent,
+    };
+  });
 }
 
 export function getLast30DaysCounts(sessions: WorkoutSession[]): DailyBar[] {
