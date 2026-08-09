@@ -4,6 +4,7 @@ import { useState, useEffect, useRef } from 'react';
 import { WorkoutProgram, WorkoutSession, ExerciseLog, WorkoutDay, ExerciseHistory } from '@/types';
 import { saveSession } from '@/lib/db';
 import { getExerciseHistory, getWeeklyProgression } from '@/lib/stats';
+import { getDayExercises } from '@/lib/program';
 import { generateId, todayISO, formatDateShort, daysAgo } from '@/lib/utils';
 import DualLineChart from '@/components/DualLineChart';
 import PageLayout from '@/components/PageLayout';
@@ -72,7 +73,7 @@ export default function WorkoutView({ program, sessions, startDay, editSession, 
       return;
     }
 
-    const exercises: ExerciseLog[] = day.exercises.map((ex, i) => {
+    const exercises: ExerciseLog[] = getDayExercises(program, day).map((ex, i) => {
       const history = getExerciseHistory(sessions, ex.name);
       const last = history.length > 0 ? history[0] : null;
       return {
@@ -178,6 +179,51 @@ export default function WorkoutView({ program, sessions, startDay, editSession, 
         onSelect={(day) => startWorkout(day)}
         onBack={onBack}
       />
+    );
+  }
+
+  // Rest day: no exercises to log — just confirm it as completed.
+  if (activeSession.exercises.length === 0) {
+    const restHeader = (
+      <div className="flex items-center justify-between">
+        <button onClick={onBack} className="text-[13px] text-charcoal-muted font-medium">
+          {isEditing ? 'Back' : 'Cancel'}
+        </button>
+        <p className="text-[15px] font-semibold">{activeSession.dayName}</p>
+        <div className="w-10" />
+      </div>
+    );
+    return (
+      <PageLayout header={restHeader}>
+        <div className="flex flex-col items-center justify-center text-center py-12">
+          <div className="w-16 h-16 rounded-2xl bg-warm-dark flex items-center justify-center mb-5">
+            <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" className="text-charcoal-muted">
+              <path d="M18 8h1a4 4 0 0 1 0 8h-1" /><path d="M2 8h16v9a4 4 0 0 1-4 4H6a4 4 0 0 1-4-4V8z" />
+            </svg>
+          </div>
+          <h2 className="text-[22px] font-bold tracking-tight">Rest Day</h2>
+          <p className="text-[13px] text-charcoal-muted mt-2 mb-8 max-w-[240px] leading-relaxed">
+            Recovery is part of the plan. Mark it complete to keep your streak going.
+          </p>
+          {isEditing && (
+            <div className="w-full max-w-xs mb-5 flex items-center gap-2">
+              <label className="text-[11px] text-charcoal-muted font-medium uppercase tracking-wider">Date</label>
+              <input
+                type="date"
+                value={activeSession.date}
+                onChange={(e) => setActiveSession({ ...activeSession, date: e.target.value })}
+                className="flex-1 bg-surface-50 rounded-lg px-3 py-1.5 text-[13px] font-medium focus:outline-none focus:ring-2 focus:ring-accent/20 focus:bg-white transition-all"
+              />
+            </div>
+          )}
+          <button
+            onClick={finishWorkout}
+            className="w-full max-w-xs py-3.5 rounded-2xl bg-accent text-white text-[14px] font-semibold active:scale-[0.97] transition-all shadow-sm"
+          >
+            {isEditing ? 'Save' : 'Complete Rest Day'}
+          </button>
+        </div>
+      </PageLayout>
     );
   }
 
@@ -366,17 +412,6 @@ export default function WorkoutView({ program, sessions, startDay, editSession, 
             ))}
           </div>
         </div>
-
-        <div className="mt-5">
-          <label className="label-uppercase">Notes</label>
-          <textarea
-            value={currentExercise.notes}
-            onChange={(e) => updateExercise(currentExerciseIndex, { notes: e.target.value })}
-            placeholder="Any observations..."
-            rows={2}
-            className="w-full mt-2 bg-surface-50 rounded-xl px-4 py-3 text-[13px] resize-none focus:outline-none focus:ring-2 focus:ring-accent/20 focus:bg-white transition-all leading-relaxed"
-          />
-        </div>
       </div>
 
       <div className="flex gap-3 mb-6">
@@ -398,17 +433,6 @@ export default function WorkoutView({ program, sessions, startDay, editSession, 
         >
           Next Exercise
         </button>
-      </div>
-
-      <div className="card p-5">
-        <label className="label-uppercase">Session Notes</label>
-        <textarea
-          value={activeSession.notes}
-          onChange={(e) => setActiveSession({ ...activeSession, notes: e.target.value })}
-          placeholder="Anything else to remember?"
-          rows={2}
-          className="w-full mt-2 bg-surface-50 rounded-xl px-4 py-3 text-[13px] resize-none focus:outline-none focus:ring-2 focus:ring-accent/20 focus:bg-white transition-all leading-relaxed"
-        />
       </div>
     </PageLayout>
   );
@@ -471,7 +495,7 @@ function DaySelector({
   return (
     <PageLayout header={headerContent}>
       <div className="space-y-3">
-        {program.days.filter(d => !d.isRest).map((day) => {
+        {program.days.map((day) => {
           const lastForDay = sessions
             .filter(s => s.completed && s.dayId === day.id)
             .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())[0];
@@ -486,7 +510,7 @@ function DaySelector({
                 <div>
                   <p className="text-[15px] font-semibold">{day.name}</p>
                   <p className="text-[12px] text-charcoal-muted mt-0.5 font-medium">
-                    {day.exercises.length} exercises
+                    {day.isRest ? 'Rest day' : `${day.exercises.length} exercises`}
                   </p>
                 </div>
                 <div className="text-right">

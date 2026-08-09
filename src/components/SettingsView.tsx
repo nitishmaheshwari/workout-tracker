@@ -3,7 +3,6 @@
 import { useState, useEffect } from 'react';
 import { exportAllData, importData } from '@/lib/db';
 import { useTheme } from '@/lib/theme';
-import { getBackupInfo, restoreFromLocalStorage, autoBackupToLocalStorage } from '@/lib/backup';
 import {
   isConfigured,
   getClientId,
@@ -26,7 +25,6 @@ interface SettingsViewProps {
 export default function SettingsView({ onImport }: SettingsViewProps) {
   const [message, setMessage] = useState('');
   const { theme, toggle } = useTheme();
-  const [backupInfo, setBackupInfo] = useState<{ exists: boolean; timestamp: string | null; sessionCount: number }>({ exists: false, timestamp: null, sessionCount: 0 });
   const [driveConnected, setDriveConnected] = useState(false);
   const [driveConfigured, setDriveConfigured] = useState(false);
   const [showClientIdInput, setShowClientIdInput] = useState(false);
@@ -35,7 +33,6 @@ export default function SettingsView({ onImport }: SettingsViewProps) {
   const [lastSync, setLastSync] = useState<string | null>(null);
 
   useEffect(() => {
-    setBackupInfo(getBackupInfo());
     setDriveConfigured(isConfigured());
     if (isConfigured()) {
       const restored = tryRestoreToken();
@@ -78,22 +75,6 @@ export default function SettingsView({ onImport }: SettingsViewProps) {
       }
     };
     input.click();
-  }
-
-  async function handleBackupNow() {
-    await autoBackupToLocalStorage();
-    setBackupInfo(getBackupInfo());
-    setMessage('Backup saved locally');
-  }
-
-  async function handleRestoreLocal() {
-    const success = await restoreFromLocalStorage();
-    if (success) {
-      setMessage('Data restored from local backup');
-      onImport();
-    } else {
-      setMessage('No backup found');
-    }
   }
 
   function handleSaveClientId() {
@@ -326,41 +307,8 @@ export default function SettingsView({ onImport }: SettingsViewProps) {
         </div>
 
         <div className="card p-5">
-          <p className="label-uppercase mb-4">Local Backup</p>
-          <div className="bg-surface-50 rounded-xl p-4 mb-4">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-[13px] font-semibold">
-                  {backupInfo.exists ? 'Backup Available' : 'No Backup Yet'}
-                </p>
-                {backupInfo.exists && (
-                  <p className="text-[11px] text-charcoal-muted mt-0.5">
-                    {backupInfo.sessionCount} sessions · {formatTimestamp(backupInfo.timestamp)}
-                  </p>
-                )}
-                <p className="text-[11px] text-charcoal-muted mt-1">
-                  Auto-saves daily at 9 PM and after every workout
-                </p>
-              </div>
-              <div className={`w-2.5 h-2.5 rounded-full ${backupInfo.exists ? 'bg-success' : 'bg-surface-300'}`} />
-            </div>
-          </div>
+          <p className="label-uppercase mb-4">Data</p>
           <div className="space-y-2.5">
-            <div className="flex gap-2">
-              <button
-                onClick={handleBackupNow}
-                className="flex-1 py-3 rounded-xl bg-surface-50 text-[12px] font-semibold text-charcoal active:scale-[0.97] transition-all"
-              >
-                Backup Now
-              </button>
-              <button
-                onClick={handleRestoreLocal}
-                disabled={!backupInfo.exists}
-                className="flex-1 py-3 rounded-xl bg-accent text-white text-[12px] font-semibold active:scale-[0.97] transition-all disabled:opacity-30"
-              >
-                Restore
-              </button>
-            </div>
             <button
               onClick={handleExport}
               className="w-full flex items-center gap-3 py-3 px-4 bg-surface-50 rounded-xl text-left active:scale-[0.97] transition-all"

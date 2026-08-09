@@ -21,16 +21,6 @@ const NAV_ITEMS: { view: View; label: string; icon: (active: boolean) => React.R
     ),
   },
   {
-    view: 'workout',
-    label: 'Train',
-    icon: (active) => (
-      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={active ? '2.2' : '1.8'} strokeLinecap="round" strokeLinejoin="round">
-        <circle cx="12" cy="12" r="3" fill={active ? 'currentColor' : 'none'} />
-        <circle cx="12" cy="12" r="9" />
-      </svg>
-    ),
-  },
-  {
     view: 'history',
     label: 'History',
     icon: (active) => (

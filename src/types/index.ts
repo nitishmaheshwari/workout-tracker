@@ -1,6 +1,13 @@
-export interface Exercise {
+// A reusable exercise definition, stored once in the program library.
+export interface ExerciseDefinition {
   id: string;
   name: string;
+  order: number;
+}
+
+// A reference from a workout day to a library exercise definition.
+export interface DayExercise {
+  exerciseId: string;
   order: number;
 }
 
@@ -8,13 +15,15 @@ export interface WorkoutDay {
   id: string;
   name: string;
   dayNumber: number;
-  exercises: Exercise[];
+  exercises: DayExercise[];
   isRest: boolean;
 }
 
 export interface WorkoutProgram {
   id: string;
   name: string;
+  // The exercise library: every exercise used across days is defined here once.
+  exercises: ExerciseDefinition[];
   days: WorkoutDay[];
   createdAt: string;
 }

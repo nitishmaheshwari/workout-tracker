@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react';
 import { WorkoutProgram, WorkoutSession, DashboardStats, WorkoutDay } from '@/types';
 import { getAllPrograms, getAllSessions, saveProgram, saveSession, deleteSession } from '@/lib/db';
 import { DEFAULT_PROGRAM } from '@/lib/defaults';
+import { migrateProgram } from '@/lib/program';
 import { calculateDashboardStats } from '@/lib/stats';
 import { autoBackupToLocalStorage, scheduleNightlyBackup, getBackupInfo, restoreFromLocalStorage } from '@/lib/backup';
 import Dashboard from '@/components/Dashboard';
@@ -49,11 +50,17 @@ export default function Home() {
         programs = [DEFAULT_PROGRAM];
       }
 
-      allSessions = await normalizeExerciseNamesOnce(programs[0], allSessions);
+      // Migrate any legacy (inline-exercise) program to the shared-library model.
+      const migrated = migrateProgram(programs[0]);
+      if (migrated !== programs[0]) {
+        await saveProgram(migrated);
+      }
 
-      setProgram(programs[0]);
+      allSessions = await normalizeExerciseNamesOnce(migrated, allSessions);
+
+      setProgram(migrated);
       setSessions(allSessions);
-      setStats(calculateDashboardStats(allSessions, programs[0]));
+      setStats(calculateDashboardStats(allSessions, migrated));
     } catch (e) {
       console.error('Failed to load data:', e);
     } finally {
@@ -198,11 +205,9 @@ async function normalizeExerciseNamesOnce(
   if (localStorage.getItem(NORMALIZE_FLAG_KEY)) return sessions;
 
   const canonical = new Map<string, string>();
-  for (const day of program.days) {
-    for (const ex of day.exercises) {
-      const key = ex.name.toLowerCase();
-      if (!canonical.has(key)) canonical.set(key, ex.name);
-    }
+  for (const ex of program.exercises) {
+    const key = ex.name.toLowerCase();
+    if (!canonical.has(key)) canonical.set(key, ex.name);
   }
 
   const updated: WorkoutSession[] = [];
