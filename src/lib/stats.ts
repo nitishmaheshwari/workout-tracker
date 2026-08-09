@@ -54,15 +54,7 @@ export function calculateDashboardStats(sessions: WorkoutSession[], program: Wor
     daysSinceLastWorkout = diff < 0 ? 0 : diff;
   }
 
-  // Days this month (up to today) with no completed session logged — i.e. days
-  // skipped entirely. Rest days count as logged once completed.
-  const loggedDatesThisMonth = new Set(
-    completedSessions
-      .filter(s => parseISO(s.date) >= monthStart)
-      .map(s => format(parseISO(s.date), 'yyyy-MM-dd'))
-  );
-  const daysElapsedThisMonth = now.getDate();
-  const missedThisMonth = Math.max(0, daysElapsedThisMonth - loggedDatesThisMonth.size);
+  const missedThisMonth = calculateMissedThisMonth(completedSessions, program, now, monthStart);
 
   return {
     workoutsThisWeek,
@@ -76,6 +68,49 @@ export function calculateDashboardStats(sessions: WorkoutSession[], program: Wor
     daysSinceLastWorkout,
     missedThisMonth,
   };
+}
+
+// Count scheduled TRAINING days this month (up to today) with nothing logged.
+// The schedule advances one program day per calendar day, anchored by the last
+// completed session on or before each date. Rest days are never "missed", and
+// any day you logged a workout or rest is not missed.
+function calculateMissedThisMonth(
+  sessions: WorkoutSession[],
+  program: WorkoutProgram | null,
+  now: Date,
+  monthStart: Date,
+): number {
+  if (!program || program.days.length === 0) return 0;
+
+  const loggedDates = new Set(sessions.map(s => format(parseISO(s.date), 'yyyy-MM-dd')));
+
+  // Build a lookup of date -> program day index from completed sessions, so we
+  // can anchor the schedule to what was actually done.
+  const anchors = [...sessions]
+    .sort((a, b) => parseISO(a.date).getTime() - parseISO(b.date).getTime())
+    .map(s => ({ date: parseISO(s.date), idx: program.days.findIndex(d => d.id === s.dayId) }))
+    .filter(a => a.idx !== -1);
+
+  if (anchors.length === 0) return 0;
+
+  let missed = 0;
+  for (let day = new Date(monthStart); day <= now; day = addDays(day, 1)) {
+    const key = format(day, 'yyyy-MM-dd');
+    if (loggedDates.has(key)) continue;
+
+    // Find the latest anchor on or before this day to derive the schedule slot.
+    let anchor = null;
+    for (const a of anchors) {
+      if (a.date <= day) anchor = a;
+      else break;
+    }
+    if (!anchor) continue; // before the very first workout — not counted
+
+    const gap = differenceInDays(day, anchor.date);
+    const slot = (anchor.idx + gap) % program.days.length;
+    if (!program.days[slot].isRest) missed++;
+  }
+  return missed;
 }
 
 function calculateLongestStreak(sessions: WorkoutSession[], program: WorkoutProgram | null): number {

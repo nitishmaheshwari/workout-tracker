@@ -270,7 +270,7 @@ function getModalMeta(statKey: StatKey, stats: DashboardStats): { label: string;
     case 'total':
       return { label: 'All Time', value: String(stats.totalWorkouts), subtitle: 'Cumulative workouts' };
     case 'missed':
-      return { label: 'Missed This Month', value: String(stats.missedThisMonth), subtitle: 'Days this month with nothing logged' };
+      return { label: 'Missed This Month', value: String(stats.missedThisMonth), subtitle: 'Scheduled training days skipped (rest days don’t count)' };
   }
 }
 
