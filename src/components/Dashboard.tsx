@@ -457,17 +457,16 @@ function CumulativeLineChart({ data }: { data: { label: string; value: number }[
   );
 }
 
-// Label for the "All Time" tile: "Since dd/mm/yy" using the first completed workout.
+// Label for the "All Time" tile: number of days since the first completed
+// workout, so workout frequency (workouts ÷ days) is easy to eyeball.
 function getSinceLabel(sessions: WorkoutSession[]): string {
   const completed = sessions.filter(s => s.completed);
   if (completed.length === 0) return 'All Time';
   const first = completed
     .map(s => new Date(s.date))
     .sort((a, b) => a.getTime() - b.getTime())[0];
-  const dd = String(first.getDate()).padStart(2, '0');
-  const mm = String(first.getMonth() + 1).padStart(2, '0');
-  const yy = String(first.getFullYear()).slice(-2);
-  return `Since ${dd}/${mm}/${yy}`;
+  const days = Math.floor((Date.now() - first.getTime()) / (1000 * 60 * 60 * 24)) + 1;
+  return `In ${days} ${days === 1 ? 'day' : 'days'}`;
 }
 
 function getNextWorkoutDay(program: WorkoutProgram, sessions: WorkoutSession[]) {
