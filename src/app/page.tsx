@@ -59,9 +59,13 @@ export default function Home() {
       allSessions = await normalizeExerciseNamesOnce(migrated, allSessions);
 
       // Sessions are the source of truth — fold any logged-but-missing exercise
-      // back into the library and routine (once). Runs after name normalization
-      // so lifted names match the library's casing.
-      const reconciled = await reconcileProgramFromSessionsOnce(migrated, allSessions);
+      // back into the library and routine on every load (runs after name
+      // normalization so lifted names match the library's casing). A no-op when
+      // the program already covers everything logged.
+      const reconciled = reconcileProgramFromSessions(migrated, allSessions);
+      if (reconciled !== migrated) {
+        await saveProgram(reconciled);
+      }
 
       setProgram(reconciled);
       setSessions(allSessions);
@@ -74,9 +78,23 @@ export default function Home() {
   }
 
   async function refreshSessions() {
+    // Reload the program too: an import can replace it, and newly logged
+    // sessions may reference exercises missing from the plan. Reconcile so the
+    // library/routine always reflect the session data (source of truth).
+    const programs = await getAllPrograms();
     const allSessions = await getAllSessions();
+    let current = program;
+    if (programs.length > 0) {
+      const migrated = migrateProgram(programs[0]);
+      const reconciled = reconcileProgramFromSessions(migrated, allSessions);
+      if (reconciled !== programs[0]) {
+        await saveProgram(reconciled);
+      }
+      current = reconciled;
+      setProgram(reconciled);
+    }
     setSessions(allSessions);
-    setStats(calculateDashboardStats(allSessions, program));
+    setStats(calculateDashboardStats(allSessions, current));
     autoBackupToLocalStorage();
   }
 
@@ -198,27 +216,6 @@ export default function Home() {
       <Navigation currentView={view} onNavigate={setView} />
     </div>
   );
-}
-
-const RECONCILE_FLAG_KEY = 'program-reconciled-v1';
-
-// One-time backfill: lift exercises that were logged but never made it into the
-// program's library/routine back into it. Runs once (guarded by a flag) rather
-// than every load, so later manual edits in the Program editor (e.g. removing a
-// previously-logged exercise from a day) aren't undone on the next launch.
-async function reconcileProgramFromSessionsOnce(
-  program: WorkoutProgram,
-  sessions: WorkoutSession[],
-): Promise<WorkoutProgram> {
-  if (typeof window === 'undefined') return program;
-  if (localStorage.getItem(RECONCILE_FLAG_KEY)) return program;
-
-  const reconciled = reconcileProgramFromSessions(program, sessions);
-  if (reconciled !== program) {
-    await saveProgram(reconciled);
-  }
-  localStorage.setItem(RECONCILE_FLAG_KEY, '1');
-  return reconciled;
 }
 
 const NORMALIZE_FLAG_KEY = 'exercise-name-normalized-v1';
