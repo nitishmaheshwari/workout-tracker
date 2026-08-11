@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react';
 import { WorkoutProgram, WorkoutSession, DashboardStats, WorkoutDay } from '@/types';
 import { getAllPrograms, getAllSessions, saveProgram, saveSession, deleteSession } from '@/lib/db';
 import { DEFAULT_PROGRAM } from '@/lib/defaults';
-import { migrateProgram } from '@/lib/program';
+import { migrateProgram, reconcileProgramFromSessions } from '@/lib/program';
 import { calculateDashboardStats } from '@/lib/stats';
 import { autoBackupToLocalStorage, scheduleNightlyBackup, getBackupInfo, restoreFromLocalStorage } from '@/lib/backup';
 import Dashboard from '@/components/Dashboard';
@@ -58,9 +58,14 @@ export default function Home() {
 
       allSessions = await normalizeExerciseNamesOnce(migrated, allSessions);
 
-      setProgram(migrated);
+      // Sessions are the source of truth — fold any logged-but-missing exercise
+      // back into the library and routine (once). Runs after name normalization
+      // so lifted names match the library's casing.
+      const reconciled = await reconcileProgramFromSessionsOnce(migrated, allSessions);
+
+      setProgram(reconciled);
       setSessions(allSessions);
-      setStats(calculateDashboardStats(allSessions, migrated));
+      setStats(calculateDashboardStats(allSessions, reconciled));
     } catch (e) {
       console.error('Failed to load data:', e);
     } finally {
@@ -193,6 +198,27 @@ export default function Home() {
       <Navigation currentView={view} onNavigate={setView} />
     </div>
   );
+}
+
+const RECONCILE_FLAG_KEY = 'program-reconciled-v1';
+
+// One-time backfill: lift exercises that were logged but never made it into the
+// program's library/routine back into it. Runs once (guarded by a flag) rather
+// than every load, so later manual edits in the Program editor (e.g. removing a
+// previously-logged exercise from a day) aren't undone on the next launch.
+async function reconcileProgramFromSessionsOnce(
+  program: WorkoutProgram,
+  sessions: WorkoutSession[],
+): Promise<WorkoutProgram> {
+  if (typeof window === 'undefined') return program;
+  if (localStorage.getItem(RECONCILE_FLAG_KEY)) return program;
+
+  const reconciled = reconcileProgramFromSessions(program, sessions);
+  if (reconciled !== program) {
+    await saveProgram(reconciled);
+  }
+  localStorage.setItem(RECONCILE_FLAG_KEY, '1');
+  return reconciled;
 }
 
 const NORMALIZE_FLAG_KEY = 'exercise-name-normalized-v1';
